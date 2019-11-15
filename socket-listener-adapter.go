@@ -229,11 +229,8 @@ func createUDPListener(socketConfig adapterSettings) {
 
 	pc, err := net.ListenPacket("udp", ":"+socketConfig.ListenPort)
 	if err != nil {
-		log.Fatalf("failed to listen: %s", err.Error())
-	}
-
-	if err != nil {
-		log.Fatalf("[FATAL] createUDPListener - Error  creating UDP listener with port %s: %s", socketConfig.ListenPort, err.Error())
+		log.Printf("[ERROR] createUDPListener - Error  creating UDP listener with port %s: %s", socketConfig.ListenPort, err.Error())
+		return
 	}
 
 	buffer := make([]byte, 65535)
