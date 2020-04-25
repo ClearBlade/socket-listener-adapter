@@ -200,8 +200,7 @@ func onConnect(client mqtt.Client) {
 }
 
 func onConnectLost(client mqtt.Client, connerr error) {
-	log.Printf("[ERROR] onConnectLost - ClearBlade MQTT lost connection: %s", connerr.Error())
-	// reconnect logic should be handled by go/paho sdk under the covers
+	log.Fatalf("[ERROR] onConnectLost - ClearBlade MQTT lost connection: %s\n", connerr.Error())
 }
 
 func createTCPListener(socketConfig adapterSettings) {
