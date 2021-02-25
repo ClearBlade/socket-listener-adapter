@@ -3,24 +3,19 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
-	mqtt "github.com/clearblade/paho.mqtt.golang"
-	"github.com/hashicorp/logutils"
-
-	cb "github.com/clearblade/Go-SDK"
+	adapter_library "github.com/clearblade/adapter-go-library"
 )
 
 const (
+	adapterName = "socket-listener-adapter"
+
 	msgPublishQOS              = 0
 	defaultTopicRoot           = "socket-listener"
 	defaultListenPort          = "12345"
@@ -33,164 +28,108 @@ const (
 )
 
 var (
-	sysKey              string
-	sysSec              string
-	deviceName          string
-	activeKey           string
-	platformURL         string
-	messagingURL        string
-	logLevel            string
-	logFilePath         string
-	adapterConfigCollID string
-	cbClient            *cb.DeviceClient
-	config              adapterConfig
+	adapterConfig   *adapter_library.AdapterConfig
+	adapterSettings *[]socketAdapterSettings
 )
 
-type adapterSettings struct {
+type socketAdapterSettings struct {
 	Protocol            string `json:"protocol"`
 	ListenPort          string `json:"listen_port"`
 	MessageEndCharacter string `json:"message_end_character"`
 	TransformToHex      bool   `json:"transform_to_hex"`
 }
 
-type adapterConfig struct {
-	AdapterSettings []adapterSettings `json:"adapter_settings"`
-	TopicRoot       string            `json:"topic_root"`
-}
+// func init() {
+// 	flag.StringVar(&sysKey, "systemKey", "", "system key (required)")
+// 	flag.StringVar(&sysSec, "systemSecret", "", "system secret (required)")
+// 	flag.StringVar(&deviceName, "deviceName", defaultDeviceName, "name of device (optional)")
+// 	flag.StringVar(&activeKey, "activeKey", "", "active key for device authentication (required)")
+// 	flag.StringVar(&platformURL, "platformURL", defaultPlatformURL, "platform url (optional)")
+// 	flag.StringVar(&messagingURL, "messagingURL", defaultMessagingURL, "messaging URL (optional)")
+// 	flag.StringVar(&logLevel, "logLevel", defaultLogLevel, "The level of logging to use. Available levels are 'debug, 'info', 'warn', 'error', 'fatal' (optional)")
+// 	flag.StringVar(&logFilePath, "logFilePath", defaultLogFilePath, "Path for the log file of the adapter (optional - default is stdout, provide a full path to desired log file output location)")
+// 	flag.StringVar(&adapterConfigCollID, "adapterConfigCollectionID", "", "The ID of the data collection used to house adapter configuration (required)")
+// }
 
-func init() {
-	flag.StringVar(&sysKey, "systemKey", "", "system key (required)")
-	flag.StringVar(&sysSec, "systemSecret", "", "system secret (required)")
-	flag.StringVar(&deviceName, "deviceName", defaultDeviceName, "name of device (optional)")
-	flag.StringVar(&activeKey, "activeKey", "", "active key for device authentication (required)")
-	flag.StringVar(&platformURL, "platformURL", defaultPlatformURL, "platform url (optional)")
-	flag.StringVar(&messagingURL, "messagingURL", defaultMessagingURL, "messaging URL (optional)")
-	flag.StringVar(&logLevel, "logLevel", defaultLogLevel, "The level of logging to use. Available levels are 'debug, 'info', 'warn', 'error', 'fatal' (optional)")
-	flag.StringVar(&logFilePath, "logFilePath", defaultLogFilePath, "Path for the log file of the adapter (optional - default is stdout, provide a full path to desired log file output location)")
-	flag.StringVar(&adapterConfigCollID, "adapterConfigCollectionID", "", "The ID of the data collection used to house adapter configuration (required)")
-}
+// func usage() {
+// 	log.Printf("Usage: socket-listener-adapter [options]\n\n")
+// 	flag.PrintDefaults()
+// }
 
-func usage() {
-	log.Printf("Usage: socket-listener-adapter [options]\n\n")
-	flag.PrintDefaults()
-}
+// func validateFlags() {
+// 	flag.Parse()
 
-func validateFlags() {
-	flag.Parse()
+// 	if sysKey == "" || sysSec == "" || activeKey == "" || adapterConfigCollID == "" {
+// 		log.Println("ERROR - Missing required flags")
+// 		flag.Usage()
+// 		os.Exit(1)
+// 	}
 
-	if sysKey == "" || sysSec == "" || activeKey == "" || adapterConfigCollID == "" {
-		log.Println("ERROR - Missing required flags")
-		flag.Usage()
-		os.Exit(1)
-	}
-
-}
+// }
 
 func main() {
-	log.Println("Starting socket-listener-adapter...")
-
-	flag.Usage = usage
-	validateFlags()
-
-	rand.Seed(time.Now().UnixNano())
-
-	log.SetFlags(log.LstdFlags | log.Lshortfile)
-	filter := &logutils.LevelFilter{
-		Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"},
-		MinLevel: logutils.LogLevel(strings.ToUpper(logLevel)),
+	err := adapter_library.ParseArguments(adapterName)
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to parse arguments: %s\n", err.Error())
 	}
-	if logFilePath == "stdout" {
-		log.Println("using stdout for logging")
-		filter.Writer = os.Stdout
-	} else {
-		log.Printf("using %s for logging\n", logFilePath)
-		logfile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-		if err != nil {
-			log.Fatalf("Failed to open log file: %s", err.Error())
-		}
-		defer logfile.Close()
-		filter.Writer = logfile
+
+	adapterConfig, err = adapter_library.Initialize()
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to initialize: %s\n", err.Error())
 	}
-	log.SetOutput(filter)
 
-	initClearBlade()
-	initAdapterConfig()
-	connectClearBlade()
+	adapterSettings = &[]socketAdapterSettings{}
+	err = json.Unmarshal([]byte(adapterConfig.AdapterSettings), adapterSettings)
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to parse Adapter Settings: %s\n", err.Error())
+	}
 
-	log.Println("[DEBUG] main - starting info log ticker")
+	err = adapter_library.ConnectMQTT("", nil)
+	if err != nil {
+		log.Fatalf("[FATAL] Failed to connect MQTT: %s\n", err.Error())
+	}
+
+	go initializeSockets()
 
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("[INFO] main - socket-listener-adapter still listening")
+			log.Println("[INFO] socket-listener-adapter still listening")
 		}
 	}
 
+	// log.SetFlags(log.LstdFlags | log.Lshortfile)
+	// filter := &logutils.LevelFilter{
+	// 	Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"},
+	// 	MinLevel: logutils.LogLevel(strings.ToUpper(logLevel)),
+	// }
+	// if logFilePath == "stdout" {
+	// 	log.Println("using stdout for logging")
+	// 	filter.Writer = os.Stdout
+	// } else {
+	// 	log.Printf("using %s for logging\n", logFilePath)
+	// 	logfile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
+	// 	if err != nil {
+	// 		log.Fatalf("Failed to open log file: %s", err.Error())
+	// 	}
+	// 	defer logfile.Close()
+	// 	filter.Writer = logfile
+	// }
+	// log.SetOutput(filter)
+
+	// initClearBlade()
+	// initAdapterConfig()
+	// connectClearBlade()
+
+	// log.Println("[DEBUG] main - starting info log ticker")
+
 }
 
-func initClearBlade() {
-	log.Println("[DEBUG] initClearBlade - initializing ClearBlade")
-	cbClient = cb.NewDeviceClientWithAddrs(platformURL, messagingURL, sysKey, sysSec, deviceName, activeKey)
-	for err := cbClient.Authenticate(); err != nil; {
-		log.Printf("[ERROR] initClearBlade - Error authenticating %s: %s\n", deviceName, err.Error())
-		log.Println("[INFO] initClearBlade - Trying again in 1 minute...")
-		time.Sleep(time.Minute * 1)
-		err = cbClient.Authenticate()
-	}
-	log.Println("[INFO] initClearBlade - ClearBlade successfully initialized")
-}
-
-func initAdapterConfig() {
-	log.Println("[DEBUG] initAdapterConfig - loading adapter config from collection")
-	config = adapterConfig{
-		TopicRoot:       defaultTopicRoot,
-		AdapterSettings: []adapterSettings{},
-	}
-	query := cb.NewQuery()
-	query.EqualTo("adapter_name", deviceName)
-	results, err := cbClient.GetData(adapterConfigCollID, query)
-	if err != nil {
-		log.Printf("[ERROR] initAdapterConfig - failed to fetch adapter config: %s\n", err.Error())
-		log.Printf("[INFO] initAdapterConfig - using default adapter config: %+v\n", config)
-	} else {
-		data := results["DATA"].([]interface{})
-		if len(data) == 1 {
-			configData := data[0].(map[string]interface{})
-			if configData["topic_root"] != nil {
-				config.TopicRoot = configData["topic_root"].(string)
-				log.Printf("[INFO] initAdapterConfig - using topic root from adapter config collection: %s\n", config.TopicRoot)
-			}
-			if configData["adapter_settings"] != nil {
-				var adpSet []adapterSettings
-				if err := json.Unmarshal([]byte(configData["adapter_settings"].(string)), &adpSet); err != nil {
-					log.Printf("[ERROR] initAdapterConfig - failed to unmarshal adapter_settings json: %s\n", err.Error())
-					log.Printf("[INFO] initAdapterConfig - using default adapter settings for config: %+v\n", config)
-				} else {
-					config.AdapterSettings = adpSet
-					log.Printf("[INFO] initAdapterConfig - using adapter settings from adapter config collection: %+v\n", config.AdapterSettings)
-				}
-			}
-		} else {
-			log.Printf("[ERROR] initAdapterConfig - Unexpected number of matching adapter configs: %d\n", len(data))
-			log.Printf("[INFO] initAdapterConfig - using default adapter config: %+v\n", config)
-		}
-	}
-	log.Println("[INFO] initAdapterConfig - adapter config successfully loaded")
-}
-
-func connectClearBlade() {
-	log.Println("[INFO] connectClearBlade - connecting ClearBlade MQTT")
-	callbacks := cb.Callbacks{OnConnectCallback: onConnect, OnConnectionLostCallback: onConnectLost}
-	if err := cbClient.InitializeMQTTWithCallback(deviceName+"-"+strconv.Itoa(rand.Intn(10000)), "", 30, nil, nil, &callbacks); err != nil {
-		log.Fatalf("[FATAL] connectClearBlade - Unable to connect ClearBlade MQTT: %s", err.Error())
-	}
-}
-
-func onConnect(client mqtt.Client) {
-	log.Println("[INFO] onConnect - ClearBlade MQTT successfully connected")
-	for _, socketConfig := range config.AdapterSettings {
+func initializeSockets() {
+	log.Println("[INFO] initializeSockets - Creating socket listeners...")
+	for _, socketConfig := range *adapterSettings {
 		if socketConfig.Protocol == "tcp" {
 			go createTCPListener(socketConfig)
 		} else {
@@ -199,11 +138,18 @@ func onConnect(client mqtt.Client) {
 	}
 }
 
-func onConnectLost(client mqtt.Client, connerr error) {
-	log.Fatalf("[ERROR] onConnectLost - ClearBlade MQTT lost connection: %s\n", connerr.Error())
-}
+// func onConnect(client mqtt.Client) {
+// 	log.Println("[INFO] onConnect - ClearBlade MQTT successfully connected")
+// 	for _, socketConfig := range config.AdapterSettings {
+// 		if socketConfig.Protocol == "tcp" {
+// 			go createTCPListener(socketConfig)
+// 		} else {
+// 			go createUDPListener(socketConfig)
+// 		}
+// 	}
+// }
 
-func createTCPListener(socketConfig adapterSettings) {
+func createTCPListener(socketConfig socketAdapterSettings) {
 	log.Println("[INFO] createTCPListener - Creating TCP Listener")
 
 	listener, err := net.Listen(socketConfig.Protocol, ":"+socketConfig.ListenPort)
@@ -223,7 +169,7 @@ func createTCPListener(socketConfig adapterSettings) {
 	}
 }
 
-func createUDPListener(socketConfig adapterSettings) {
+func createUDPListener(socketConfig socketAdapterSettings) {
 	log.Println("[INFO] createUDPListener - Creating UDP Listener")
 
 	pc, err := net.ListenPacket("udp", ":"+socketConfig.ListenPort)
@@ -231,6 +177,8 @@ func createUDPListener(socketConfig adapterSettings) {
 		log.Printf("[ERROR] createUDPListener - Error  creating UDP listener with port %s: %s", socketConfig.ListenPort, err.Error())
 		return
 	}
+
+	log.Println("[INFO] createUDPListener - Listener opened and ready to accept connections")
 
 	buffer := make([]byte, 65535)
 	for {
@@ -246,7 +194,7 @@ func createUDPListener(socketConfig adapterSettings) {
 	}
 }
 
-func handleTCPConnection(conn net.Conn, socketConfig adapterSettings) {
+func handleTCPConnection(conn net.Conn, socketConfig socketAdapterSettings) {
 	log.Println("[INFO] handleConnection - New TCP connection accepted")
 
 	defer func() {
@@ -293,13 +241,13 @@ func handleTCPConnection(conn net.Conn, socketConfig adapterSettings) {
 	}
 }
 
-func publishMessage(msg string, socketConfig adapterSettings) {
-
-	topic := config.TopicRoot + "/" + socketConfig.Protocol + "/" + socketConfig.ListenPort + "/incoming-data"
+func publishMessage(msg string, socketConfig socketAdapterSettings) {
+	log.Println("[INFO] publishMessage - Publishing message")
+	topic := adapterConfig.TopicRoot + "/" + socketConfig.Protocol + "/" + socketConfig.ListenPort + "/incoming-data"
 	log.Printf("publishing message to topic: %s\n", topic)
 	msg = strings.Replace(msg, socketConfig.MessageEndCharacter, "", 1)
-	if err := cbClient.Publish(topic, []byte(msg), msgPublishQOS); err != nil {
+	if err := adapter_library.Publish(topic, []byte(msg)); err != nil {
 		log.Printf("[ERROR] publishMessage - Failed to publish message: %s\n", err.Error())
 	}
-	log.Println("message published")
+	log.Println("[DEBUG] publishMessage - message published!")
 }
