@@ -27,10 +27,3 @@ LABEL description="Runtime container - socket-listener-adapter"
 COPY --from=build /app/socket-listener-adapter /usr/local/bin/socket-listener-adapter
 
 ENTRYPOINT ["/usr/local/bin/socket-listener-adapter"]
-
-# FROM alpine:latest
-# LABEL description="Runtime container - socket-listener-adapter"
-#Copy the socket-listener-adapter binary into the image
-# COPY ./socket-listener-adapter /usr/local/bin/socket-listener-adapter
-# RUN apk --no-cache --update add ca-certificates
-# ENTRYPOINT ["/usr/local/bin/socket-listener-adapter"]
