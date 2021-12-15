@@ -9,7 +9,7 @@
 Clone this repository and execute the following commands to create a docker image for the socket-listener-adapter:  
 
 - ```cd socket-listener-adapter/docker```
-- ```docker build --no-cache -f ../docker/Dockerfile -t socket_listener_adapter  ../..```
+- ```docker build --no-cache -f ../docker/Dockerfile -t socket_listener_adapter  ..```
 
 #### Clean docker build cache
 - ```docker builder prune```
