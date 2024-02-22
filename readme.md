@@ -10,12 +10,12 @@ The __socket-listener-adapter__ adapter utilizes MQTT messaging to communicate w
   * {__TOPIC ROOT__}/{__PROTOCOL__}/{__LISTENER PORT__}/incoming-data
 
 ## ClearBlade Platform Dependencies
-The Septentrio GNSS adapter was constructed to provide the ability to communicate with a _System_ defined in a ClearBlade Platform instance. Therefore, the adapter requires a _System_ to have been created within a ClearBlade Platform instance.
+The __socket-listener-adapter__ adapter was constructed to provide the ability to communicate with a _System_ defined in a ClearBlade Platform instance. Therefore, the adapter requires a _System_ to have been created within a ClearBlade Platform instance.
 
 Once a System has been created, artifacts must be defined within the ClearBlade Platform system to allow the adapters to function properly. At a minimum: 
 
-  * A device needs to be created in the Auth --> Devices collection. The device will represent the adapter, or more importantly, the Septentrio GNSS receiver or the gateway on which the adapter is executing. The _name_ and _active key_ values specified in the Auth --> Devices collection will be used by the adapter to authenticate to the ClearBlade Platform or ClearBlade Edge. 
-  * An adapter configuration data collection needs to be created in the ClearBlade Platform _system_ and populated with the data appropriate to the Septentrio GNSS receiver installation. The schema of the data collection should be as follows:
+  * A device needs to be created in the Auth --> Devices collection. The device will represent the adapter, or more importantly, the __socket-listener-adapter__ or the gateway on which the adapter is executing. The _name_ and _active key_ values specified in the Auth --> Devices collection will be used by the adapter to authenticate to the ClearBlade Platform or ClearBlade Edge. 
+  * An adapter configuration data collection needs to be created in the ClearBlade Platform _system_ and populated with the data appropriate to the __socket-listener-adapter__ installation. The schema of the data collection should be as follows:
 
 
 | Column Name      | Column Datatype |
