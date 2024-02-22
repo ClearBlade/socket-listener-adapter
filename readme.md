@@ -83,7 +83,7 @@ The adapter_settings column will need to contain an array of JSON objects contai
   * The device name the adapter will use to authenticate to the ClearBlade Platform
   * Requires the device to have been defined in the _Auth - Devices_ collection within the ClearBlade Platform __System__
   * OPTIONAL
-  * Defaults to __septentrio-gnss-adapter__
+  * Defaults to __socket-listener-adapter__
    
    __password__
   * REQUIRED
