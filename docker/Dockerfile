@@ -4,6 +4,7 @@
 FROM golang:alpine AS build
 LABEL description="Build container - socket-listener-adapter"
 
+#This instructs Docker to use this directory as the default destination for all subsequent commands
 WORKDIR /app
 
 COPY go.mod ./

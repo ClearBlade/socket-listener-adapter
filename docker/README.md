@@ -12,6 +12,9 @@ Clone this repository and execute the following commands to create a docker imag
 
 docker buildx build --no-cache --platform linux/amd64 -t clearblade/socket-listener-adapter:1.0.0 -t clearblade/socket-listener-adapter:latest -f docker/Dockerfile .
 
+#### Clean docker build cache
+- ```docker builder prune```
+
 # Using the adapter
 
 ## Deploying the adapter image
