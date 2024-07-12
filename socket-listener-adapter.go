@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net"
 	"strings"
@@ -39,34 +39,6 @@ type socketAdapterSettings struct {
 	TransformToHex      bool   `json:"transform_to_hex"`
 }
 
-// func init() {
-// 	flag.StringVar(&sysKey, "systemKey", "", "system key (required)")
-// 	flag.StringVar(&sysSec, "systemSecret", "", "system secret (required)")
-// 	flag.StringVar(&deviceName, "deviceName", defaultDeviceName, "name of device (optional)")
-// 	flag.StringVar(&activeKey, "activeKey", "", "active key for device authentication (required)")
-// 	flag.StringVar(&platformURL, "platformURL", defaultPlatformURL, "platform url (optional)")
-// 	flag.StringVar(&messagingURL, "messagingURL", defaultMessagingURL, "messaging URL (optional)")
-// 	flag.StringVar(&logLevel, "logLevel", defaultLogLevel, "The level of logging to use. Available levels are 'debug, 'info', 'warn', 'error', 'fatal' (optional)")
-// 	flag.StringVar(&logFilePath, "logFilePath", defaultLogFilePath, "Path for the log file of the adapter (optional - default is stdout, provide a full path to desired log file output location)")
-// 	flag.StringVar(&adapterConfigCollID, "adapterConfigCollectionID", "", "The ID of the data collection used to house adapter configuration (required)")
-// }
-
-// func usage() {
-// 	log.Printf("Usage: socket-listener-adapter [options]\n\n")
-// 	flag.PrintDefaults()
-// }
-
-// func validateFlags() {
-// 	flag.Parse()
-
-// 	if sysKey == "" || sysSec == "" || activeKey == "" || adapterConfigCollID == "" {
-// 		log.Println("ERROR - Missing required flags")
-// 		flag.Usage()
-// 		os.Exit(1)
-// 	}
-
-// }
-
 func main() {
 	err := adapter_library.ParseArguments(adapterName)
 	if err != nil {
@@ -93,38 +65,9 @@ func main() {
 
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			log.Println("[INFO] socket-listener-adapter still listening")
-		}
+	for range ticker.C {
+		log.Println("[INFO] socket-listener-adapter still listening")
 	}
-
-	// log.SetFlags(log.LstdFlags | log.Lshortfile)
-	// filter := &logutils.LevelFilter{
-	// 	Levels:   []logutils.LogLevel{"DEBUG", "INFO", "WARN", "ERROR", "FATAL"},
-	// 	MinLevel: logutils.LogLevel(strings.ToUpper(logLevel)),
-	// }
-	// if logFilePath == "stdout" {
-	// 	log.Println("using stdout for logging")
-	// 	filter.Writer = os.Stdout
-	// } else {
-	// 	log.Printf("using %s for logging\n", logFilePath)
-	// 	logfile, err := os.OpenFile(logFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0644)
-	// 	if err != nil {
-	// 		log.Fatalf("Failed to open log file: %s", err.Error())
-	// 	}
-	// 	defer logfile.Close()
-	// 	filter.Writer = logfile
-	// }
-	// log.SetOutput(filter)
-
-	// initClearBlade()
-	// initAdapterConfig()
-	// connectClearBlade()
-
-	// log.Println("[DEBUG] main - starting info log ticker")
-
 }
 
 func initializeSockets() {
@@ -137,17 +80,6 @@ func initializeSockets() {
 		}
 	}
 }
-
-// func onConnect(client mqtt.Client) {
-// 	log.Println("[INFO] onConnect - ClearBlade MQTT successfully connected")
-// 	for _, socketConfig := range config.AdapterSettings {
-// 		if socketConfig.Protocol == "tcp" {
-// 			go createTCPListener(socketConfig)
-// 		} else {
-// 			go createUDPListener(socketConfig)
-// 		}
-// 	}
-// }
 
 func createTCPListener(socketConfig socketAdapterSettings) {
 	log.Println("[INFO] createTCPListener - Creating TCP Listener")
@@ -204,7 +136,7 @@ func handleTCPConnection(conn net.Conn, socketConfig socketAdapterSettings) {
 
 	if socketConfig.MessageEndCharacter == "" {
 		log.Println("[INFO] handleConnection - Reading all data until TCP connection is closed...")
-		bytes, err := ioutil.ReadAll(conn)
+		bytes, err := io.ReadAll(conn)
 		if err != nil {
 			log.Printf("[ERROR] handleConnection - Failed to read data from TCP connection: %s\n", err.Error())
 			return
